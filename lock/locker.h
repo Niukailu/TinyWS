@@ -35,7 +35,7 @@ private:
     pthread_mutex_t m_mutex;
 };
 
-
+//条件变量？
 class Cond
 {  
 public:

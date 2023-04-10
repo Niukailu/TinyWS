@@ -51,7 +51,7 @@ public:
     HttpConn *users;
 
     //数据库相关
-    ConnectionPool *m_connPool;
+    SqlConnectionPool *m_connPool;
     string m_user;           //登录数据库用户名
     string m_passwd;         //登录数据库密码
     string m_database_name;  //使用数据库名

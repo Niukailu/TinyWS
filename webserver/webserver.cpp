@@ -57,6 +57,10 @@ void WebServer::log_write() {
 }
 
 void WebServer::sql_pool() {
-    //
-    m_connPool = ConnectionPool::
+    //初始化数据库连接池
+    m_connPool = SqlConnectionPool::get_instance();
+    m_connPool->init("localhost", m_user, m_passwd, m_database_name, 3306, m_sql_num, m_close_log);
+
+    //初始化数据库读取表
+    
 }

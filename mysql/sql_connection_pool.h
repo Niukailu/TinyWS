@@ -2,32 +2,57 @@
 #define __SQL_CONNECTION_POOL__
 
 #include <mysql/mysql.h>
+#include <string>
+#include <list>
+#include "../lock/locker.h"
+#include "../log/log.h"
 
-class ConnectionPool
+class SqlConnectionPool
 {
 public:
-    MYSQL* get_connection();               //获取数据库连接
-    bool release_connection(MYSQL* conn);  //释放连接
+    //懒汉单例模式获取类的实例
+    static SqlConnectionPool* get_instance();
+    //初始化数据库连接池
+    void init(std::string url, std::string user, std::string passwd, std::string database_name, int port, int max_conn, int close_log);
 
-    int get_free_conn();              //获取连接
-    void destroy_pool();	            //销毁所有连接
+    MYSQL* get_connection();               //获取一个数据库连接
+    bool release_connection(MYSQL* conn);  //释放一个连接
 
-    //懒汉单例模式
-    static ConnectionPool* get_instance();
+    int get_free_conn();              //获取当前空闲的连接数
+    void destroy_pool();	            //销毁数据库连接池   
 
-    void init();
+public:
+    std::string m_url;            //主机地址
+    std::string m_port;           //数据库端口号
+    std::string m_user;            //登陆数据库用户名
+    std::string m_passwd;          //登陆数据库密码
+    std::string m_database_name;    //使用数据库名
+    int m_close_log;           //日志开关
 
 private:
-    ConnectionPool();
-    ~ConnectionPool();
+    SqlConnectionPool();
+    ~SqlConnectionPool();
 
-
-
-
+    int m_maxConn;        //最大连接数
+    int m_curConn;         //当前已使用的连接数
+    int m_freeConn;        //当前空闲的连接数
+    
+    std::list<MYSQL*> connList;  //连接池
+    Sem reserve;           //信号量
+    Locker lock;           //互斥锁
 };
 
 
+class ConnectionRAII
+{
+public:
+    ConnectionRAII(MYSQL **con, SqlConnectionPool *connPool);
+    ~ConnectionRAII();
 
+private:
+    MYSQL *conRAII;
+    SqlConnectionPool *poolRAII;
+};
 
 
 
