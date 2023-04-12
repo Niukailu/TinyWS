@@ -331,7 +331,7 @@ HttpConn::HTTP_CODE HttpConn::process_read() {
             return INTERNAL_ERROR;
         }
     }
-    
+    //这里不对？？
     return NO_REQUEST;
 }
 
@@ -541,7 +541,7 @@ bool HttpConn::process_write(HTTP_CODE ret) {
             return false; 
         break;
     }
-    case BAD_REQUEST:
+    case NO_RESOURCE:   //这里应该是这个状态码
     {
         add_status_line(404, error_404_title);
         add_headers(strlen(error_404_form));
@@ -561,7 +561,8 @@ bool HttpConn::process_write(HTTP_CODE ret) {
     {
         add_status_line(200, ok_200_title);
         if(m_file_stat.st_size != 0) {
-            add_headers(m_file_stat.st_size);
+            add_headers(m_file_stat.st_size); //消息体在第二个缓冲区？
+
             //struct iovec 用于在用户空间和内核空间之间传递数据
             //可以一次性读取或写入多个缓冲区的数据，提高数据传输效率
             m_iv[0].iov_base = m_write_buf; //内存缓冲区的起始地址
@@ -606,28 +607,43 @@ bool HttpConn::write() {
         tmp = writev(m_sockfd, m_iv, m_iv_count);
 
         if(tmp < 0) {
-            //判断缓冲区是否满了?
+            //判断第一个写报文头部的缓冲区是否满了?
             if(errno == EAGAIN) { //"资源暂时不可用"
+                //重新注册写事件
                 modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
                 return true;
             }
+            //如果发送失败，但不是缓冲区问题，取消映射
             unmap();
             return false;
         }
 
         bytes_have_send += tmp;
         bytes_to_send -= tmp;
-        if(bytes_have_send >= m_iv[0].iov_len) {
+        if(bytes_have_send >= m_iv[0].iov_len) { //因为两个缓冲区不连续？？
+            //不再继续发送头部信息，去第二个文件的缓冲区写？
             m_iv[0].iov_len = 0;
             m_iv[1].iov_base = m_file_address + bytes_have_send - m_write_idx;
             m_iv[1].iov_len = bytes_to_send;
         }
         else {
-            
+            m_iv[0].iov_base = m_write_buf + bytes_have_send;
+            m_iv[0].iov_len -= bytes_have_send;
+        }
+
+        //判断条件，数据已全部发送完
+        if(bytes_have_send <= 0) {
+            unmap();
+            modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
+
+            if(m_linger) { //长连接需重新初始化
+                init();
+                return true;
+            }
+            else return false;
         }
     }
-    
-
+    //最后不需要return了？
 }
 
 void HttpConn::process() {

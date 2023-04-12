@@ -1,14 +1,13 @@
 #include "config/config.h"
 #include "webserver/webserver.h"
-#include "includes.h"
 
 
 int main(int argc, char *argv[]) {
     
     //自定义数据库信息：用户名,密码,数据库名
-    string user = "root";
-    string passwd = "123456";
-    string database_name = "mywsdb";
+    std::string user = "root";
+    std::string passwd = "123456";
+    std::string database_name = "mywsdb";
 
     //命令行参数解析
     Config config;
@@ -24,10 +23,20 @@ int main(int argc, char *argv[]) {
     //日志
     server.log_write();
 
-    
+    //数据库
+    server.sql_pool();
 
-    
+    //线程池
+    server.thread_pool();
 
+    //触发模式
+    server.trig_mode();
+
+    //监听
+    server.eventListen();
+
+    //运行
+    server.eventLoop();
 
 
     return 0;

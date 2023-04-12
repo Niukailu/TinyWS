@@ -47,8 +47,8 @@ public:
     int m_state;     //读为0, 写为1
 
 public:
-    HttpConn();
-    ~HttpConn();
+    HttpConn() {};
+    ~HttpConn() {};
 
     //初始化套接字地址，函数内部会调用私有方法init
     void init(int sockfd, const sockaddr_in &addr, char* root, int TRIGMode, int close_log, std::string user, std::string passwd, std::string sqlname);
@@ -116,7 +116,7 @@ private:
 
     char sql_user[100];
     char sql_passwd[100];
-    char sql_name[100];
+    char sql_name[100];    //数据库名
 
 private:
     void init();

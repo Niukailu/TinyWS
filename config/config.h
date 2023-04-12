@@ -1,7 +1,8 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-#include "../includes.h"
+#include <unistd.h>
+#include <stdlib.h>
 
 class Config
 {

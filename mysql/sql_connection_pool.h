@@ -37,15 +37,15 @@ private:
     int m_curConn;         //当前已使用的连接数
     int m_freeConn;        //当前空闲的连接数
     
-    std::list<MYSQL*> connList;  //连接池
+    std::list<MYSQL*> connList;  //数据库连接池
     Sem reserve;           //信号量
     Locker lock;           //互斥锁
 };
 
-
 class ConnectionRAII
 {
 public:
+    //数据库连接本身是指针类型，所以参数需要通过双指针才能对其进行修改
     ConnectionRAII(MYSQL **con, SqlConnectionPool *connPool);
     ~ConnectionRAII();
 

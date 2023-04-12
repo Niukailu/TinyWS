@@ -4,8 +4,8 @@ Config::Config() { //定义构造函数
     //端口号, 默认9006 (本服务器开放的端口号)
     PORT = 9006;
 
-    //日志写入方式，默认同步
-    LOGWrite = 0;
+    //日志写入方式，默认异步
+    LOGWrite = 1;
 
     //触发组合模式，默认 listenfd LT + connfd LT
     TRIGMode = 0;
@@ -16,7 +16,7 @@ Config::Config() { //定义构造函数
     //connfd触发模式，默认LT
     CONNTrigmode = 0;
 
-    //优雅关闭连接，默认不使用
+    //HTTP长连接，默认不使用
     OPT_LINGER = 0;
 
     //数据库连接池数量，默认8

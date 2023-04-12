@@ -1,9 +1,13 @@
+//线程同步机制包装类
+
 #ifndef __LOCKER_H__
 #define __LOCKER_H__
 
 #include <semaphore.h>
 #include <pthread.h>
+#include <exception>
 
+//信号量
 class Sem
 {   
 public:
@@ -19,7 +23,7 @@ private:
     sem_t m_sem;
 };
 
-
+//互斥锁
 class Locker
 {  
 public:
@@ -35,14 +39,14 @@ private:
     pthread_mutex_t m_mutex;
 };
 
-//条件变量？
+//条件变量
 class Cond
 {  
 public:
     Cond();
 
     bool wait(pthread_mutex_t* m_mutex);
-    bool timewait(pthread_mutex_t* m_mutex, struct timespec t);
+    bool time_wait(pthread_mutex_t* m_mutex, struct timespec t);
     bool signal();
     bool broadcast();
 

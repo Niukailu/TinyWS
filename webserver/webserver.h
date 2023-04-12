@@ -1,7 +1,8 @@
 #ifndef __WEBSERVER_H__
 #define __WEBSERVER_H__
 
-#include "../includes.h"
+#include <assert.h>
+#include <arpa/inet.h>
 #include "../timer/lst_timer.h"
 #include "../http/http_conn.h"
 #include "../mysql/sql_connection_pool.h"
@@ -10,7 +11,7 @@
 
 const int MAX_FD = 65536;         //最大文件描述符个数
 const int MAX_EVENT_NUM = 10000;  //最大事件数
-const int TIMESLOT = 5;           //超时单位
+const int TIMESLOT = 5;           //超时单位 秒
 
 class WebServer
 {   
@@ -18,7 +19,7 @@ public:
     WebServer();
     ~WebServer();
 
-    void init(int port, string user, string passwd, string database_name, 
+    void init(int port, std::string user, std::string passwd, std::string database_name, 
                int log_write , int opt_linger, int trigmode, int sql_num,
                int thread_num, int close_log, int actor_model);
     
@@ -32,10 +33,10 @@ public:
     void timer(int connfd, struct sockaddr_in client_address);
     void adjust_timer(UtilTimer *timer);
     void deal_timer(UtilTimer *timer, int sockfd);
-    bool dealclinetdata();
-    bool dealwithsignal(bool& timeout, bool& stop_server);
-    void dealwithread(int sockfd);
-    void dealwithwrite(int sockfd);
+    bool deal_clinet_data();
+    bool deal_with_signal(bool& timeout, bool& stop_server);
+    void deal_with_read(int sockfd);
+    void deal_with_write(int sockfd);
 
 public:
 
@@ -43,7 +44,7 @@ public:
     char *m_root;
     int m_log_write;
     int m_close_log;
-    int m_actormodel;
+    int m_actor_model; //并发模型选择，默认是proactor
 
     int m_pipefd[2];
     int m_epollfd;
@@ -52,9 +53,9 @@ public:
 
     //数据库相关
     SqlConnectionPool *m_connPool;
-    string m_user;           //登录数据库用户名
-    string m_passwd;         //登录数据库密码
-    string m_database_name;  //使用数据库名
+    std::string m_user;           //登录数据库用户名
+    std::string m_passwd;         //登录数据库密码
+    std::string m_database_name;  //使用数据库名
     int m_sql_num;
 
     //线程池相关
@@ -62,7 +63,7 @@ public:
     int m_thread_num;
 
     //epoll_event相关
-    epoll_event events[MAX_EVENT_NUM];
+    epoll_event events[MAX_EVENT_NUM]; //就绪事件数组
     
     int m_listenfd;
     int m_OPT_LINGER;
