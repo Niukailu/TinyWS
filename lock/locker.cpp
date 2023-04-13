@@ -59,9 +59,9 @@ Cond::Cond() {
 
 bool Cond::wait(pthread_mutex_t *m_mutex) {
     //在等待条件变量之前，线程必须先获取互斥锁，以保证线程安全。
-    //在等待条件变量期间，线程将阻塞在此处，直到满足条件变量的条件为止,
+    //在等待条件变量（被signal或broadcast）期间，线程将阻塞在此处，直到满足条件变量的条件为止,
     //同时，互斥锁将被释放，以允许其他线程访问共享资源
-    return pthread_cond_wait(&m_cond, m_mutex) == 0;
+    return pthread_cond_wait(&m_cond, m_mutex) == 0;  //成功返回0
 }
 
 bool Cond::time_wait(pthread_mutex_t *m_mutex, struct timespec t) {

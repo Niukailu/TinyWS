@@ -160,7 +160,7 @@ void Utils::sig_handler(int sig) {
 }
 
 //设置信号函数
-void Utils::add_signal(int sig, void(*handler)(int), bool restart = true) {
+void Utils::add_signal(int sig, void(*handler)(int), bool restart) {
     struct sigaction sa;
     memset(&sa, '\0', sizeof(sa));
     //sa_handler：指定信号处理程序的函数指针

@@ -6,7 +6,7 @@ Log::Log() {
 }
 
 Log::~Log() {
-    if(m_fp == NULL) {
+    if(m_fp != NULL) {
         fclose(m_fp);
     }
 }
@@ -21,19 +21,21 @@ void* Log::flush_log_thread(void* args) {
 }
 
 //异步需要设置阻塞队列的长度，同步不需要设置
-bool Log::init(const char* file_name, int close_log, int log_buf_size = 8192, int split_lines = 5000000, int max_queue_size = 0) {
+bool Log::init(const char* file_name, int close_log, int log_buf_size, int split_lines, int max_queue_size) {
+    //异步
     if(max_queue_size >= 1) {
         m_isAsync = true;
         m_log_queue = new block_queue<std::string>(max_queue_size);
         pthread_t tid;
-        //flush_log_thread为回调函数, 这里表示创建线程异步写日志
+        //flush_log_thread为回调函数, 这里表示创建一个写线程来异步写日志
+        //会一直执行直到函数返回（和主线程并发执行）
         pthread_create(&tid, NULL, flush_log_thread, NULL);
     }
 
     m_close_log = close_log;
     m_log_buf_size = log_buf_size;
-    m_buf = new char[m_log_buf_size];
-    memset(m_buf, '\0', m_log_buf_size);
+    m_buf = new char[m_log_buf_size];   //暂存要写入到日志文件缓冲区中的当前一行日志内容
+    memset(m_buf, '\0', m_log_buf_size); //初始化
     m_split_lines = split_lines;
 
     time_t t = time(NULL);
@@ -94,14 +96,14 @@ void Log::write_log(int level, const char* format, ...) {
         break;
     }
 
-    //线程同步写？
+    //线程同步写
     m_mutex.lock();
     //更新现有行数
     m_count++;
     //如果日志不是今天创建的 或 写入的日志行数是所限制最大行的倍数，就创建一个新log
     if(m_today != my_tm.tm_mday || m_count % m_split_lines == 0) {
         char new_log[256] = {0};
-        //刷新缓冲区, 强制将缓冲区中的数据写入文件
+        //刷新缓冲区, 强制将文件缓冲区中的数据写入磁盘文件
         fflush(m_fp);
         fclose(m_fp);
 
@@ -141,10 +143,10 @@ void Log::write_log(int level, const char* format, ...) {
 
     m_mutex.unlock();
 
-    if(m_isAsync && !m_log_queue->full()) { //异步写就push到阻塞队列
+    if(m_isAsync && !m_log_queue->full()) { //异步写就把这个字符串push到阻塞队列
         m_log_queue->push(log_str);
     }
-    else {  //同步则加锁向文件中写
+    else {  //同步则加锁向文件缓冲区中写
         m_mutex.lock();
         fputs(log_str.c_str(), m_fp);
         m_mutex.unlock();
@@ -154,11 +156,11 @@ void Log::write_log(int level, const char* format, ...) {
 
 void* Log::async_write_log() {
     std::string single_log;
-    //从阻塞队列中取出一个日志string，写入文件
-    while (m_log_queue->pop(single_log))
+    //从阻塞队列中取出一个日志string，写入日志文件
+    while (m_log_queue->pop(single_log))   //只有队列有元素就会一直取
     {
-        m_mutex.lock();
-        fputs(single_log.c_str(), m_fp);
+        m_mutex.lock(); //互斥写
+        fputs(single_log.c_str(), m_fp); //写入到文件缓冲区(系统会自动写入磁盘，也可以强制刷新缓冲区立即写入磁盘)
         m_mutex.unlock();
     }
 }

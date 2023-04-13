@@ -31,21 +31,21 @@ public:
 
     bool push(const T& item);
     bool pop(T& item);
-    bool pop(T& item, int ms_timeout)   
+    bool pop(T& item, int ms_timeout);   
 
 private:
     Locker m_mutex;  //互斥锁
     Cond m_cond;     //条件变量
 
-    T *m_array;
-    int m_size;
-    int m_max_size;
-    int m_front;
-    int m_back;
+    T *m_array;     //存放日志条目的阻塞队列
+    int m_size;     //队列元素个数
+    int m_max_size; //队列最大长度
+    int m_front;    //指向队首元素的前一个位置
+    int m_back;     //指向队尾元素
 };
 
 template<class T>
-block_queue<T>::block_queue(int max_size = 1000) {
+block_queue<T>::block_queue(int max_size) {
     if(max_size <= 0) {
         exit(-1);
     }
@@ -60,7 +60,7 @@ template<class T>
 void block_queue<T>::clear() {
     m_mutex.lock();
     m_size = 0;
-    m_front = -1; //指向有效索引的前一个位置
+    m_front = -1; 
     m_back = -1;
     m_mutex.unlock();
 }
@@ -94,7 +94,8 @@ bool block_queue<T>::front(T &value) {
         m_mutex.unlock();
         return false;
     }
-    value = m_array[m_front];
+    int pos = (m_front + 1) % m_max_size; //获得队首元素
+    value = m_array[pos];
     m_mutex.unlock();
     return true;
 }
@@ -134,15 +135,16 @@ int block_queue<T>::max_size() {
 template<class T>
 bool block_queue<T>::push(const T &item) {
     m_mutex.lock(); //在对条件变量进行操作前需先获得互斥锁
+    //如果队列满了
     if(m_size >= m_max_size) {
-        m_cond.broadcast();
+        m_cond.broadcast();  //广播通知工作线程来队列取走元素执行写操作
         m_mutex.unlock();
         return false;
     }
     m_back = (m_back + 1) % m_max_size;
     m_array[m_back] = item;
     ++m_size;
-    m_cond.broadcast();
+    m_cond.broadcast();     //添加了元素，就广播通知工作线程 (为什么不用signal?)
     m_mutex.unlock();
     return true;
 }
@@ -150,9 +152,12 @@ bool block_queue<T>::push(const T &item) {
 template<class T>
 bool block_queue<T>::pop(T &item) {
     m_mutex.lock();
+    //如果队列是空的
+    //多个消费者的时候，这里要是用while而不是if
     while (m_size <= 0)
     {
-        if(!m_cond.wait(m_mutex.get())) {
+        //阻塞等待条件变量满足(有元素被push进队列)
+        if(!m_cond.wait(m_mutex.get())) {  //在等待期间会自动释放互斥锁，并允许其他线程获得它
             m_mutex.unlock();
             return false;
         }
@@ -165,23 +170,26 @@ bool block_queue<T>::pop(T &item) {
     return true;
 }
 
+//这个函数目前项目没有用到
 template<class T>
 bool block_queue<T>::pop(T &item, int ms_timeout) { //超时处理，ms_timeout为毫秒
     struct timespec t = {0, 0};
     struct timeval now = {0, 0};
-    gettimeofday(&now, NULL); //这句不放到lock下面？
     
     m_mutex.lock();
+    gettimeofday(&now, NULL); //这句放到lock下面吧
+
     if(m_size <= 0) {
         t.tv_sec = now.tv_sec + ms_timeout / 1000;  //秒
         t.tv_nsec = (ms_timeout % 1000) * 1000;  //纳秒
-        if(!m_cond.time_wait(m_mutex.get(), t)) {
+        if(!m_cond.time_wait(m_mutex.get(), t)) {  //有限时间的等待
             m_mutex.unlock();
             return false;
         }
     }
-
-    if(m_size <= 0) { //为什么是这个判断条件？
+    //为什么还要再判断一下？
+    //理解是：如果有多个消费者，可能
+    if(m_size <= 0) { 
         m_mutex.unlock();
         return false;
     }

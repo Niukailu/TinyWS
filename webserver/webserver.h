@@ -19,11 +19,12 @@ public:
     WebServer();
     ~WebServer();
 
+    //初始化
     void init(int port, std::string user, std::string passwd, std::string database_name, 
                int log_write , int opt_linger, int trigmode, int sql_num,
                int thread_num, int close_log, int actor_model);
     
-    void log_write();
+    void log_write();   
     void sql_pool();
     void thread_pool();
     void trig_mode();
@@ -40,9 +41,9 @@ public:
 
 public:
 
-    int m_port;
+    int m_port;     //开放的端口号
     char *m_root;
-    int m_log_write;
+    int m_log_write;    //日志写入方式
     int m_close_log;
     int m_actor_model; //并发模型选择，默认是proactor
 
@@ -56,11 +57,11 @@ public:
     std::string m_user;           //登录数据库用户名
     std::string m_passwd;         //登录数据库密码
     std::string m_database_name;  //使用数据库名
-    int m_sql_num;
+    int m_sql_num;              //数据库连接池数量
 
     //线程池相关
     threadpool<HttpConn> *m_pool;
-    int m_thread_num;
+    int m_thread_num;               //线程池内的线程数量
 
     //epoll_event相关
     epoll_event events[MAX_EVENT_NUM]; //就绪事件数组

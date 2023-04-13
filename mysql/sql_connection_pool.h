@@ -22,11 +22,11 @@ public:
     void destroy_pool();	            //销毁数据库连接池   
 
 public:
-    std::string m_url;            //主机地址
-    std::string m_port;           //数据库端口号
-    std::string m_user;            //登陆数据库用户名
-    std::string m_passwd;          //登陆数据库密码
-    std::string m_database_name;    //使用数据库名
+    std::string m_url;            //mysql服务器主机地址 (localhost)
+    std::string m_port;           //mysql服务器的端口号，默认是3306
+    std::string m_user;            //连接登录数据库用户名
+    std::string m_passwd;          //连接登录数据库密码
+    std::string m_database_name;    //使用的数据库名
     int m_close_log;           //日志开关
 
 private:

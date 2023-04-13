@@ -32,7 +32,7 @@ private:
 };
 
 template<class T>
-threadpool<T>::threadpool(int actor_model, SqlConnectionPool *connPool, int thread_number = 8, int max_request = 10000)
+threadpool<T>::threadpool(int actor_model, SqlConnectionPool *connPool, int thread_number, int max_request)
 {
     m_actor_model = actor_model;
     m_thread_number = thread_number;
@@ -124,7 +124,7 @@ void threadpool<T>::run() {
                 if(request->read_once()) {
                     request->improv = 1; //??
                     //从连接池中取出一个数据库连接?
-                    connectionRAII mysqlcon(&request->mysql, m_connPool);
+                    ConnectionRAII mysqlcon(&request->mysql, m_connPool);
                     request->process();
                 }
                 else {
@@ -143,7 +143,7 @@ void threadpool<T>::run() {
             }
         }
         else {
-            connectionRAII mysqlcon(&request->mysql, m_connPool);
+            ConnectionRAII mysqlcon(&request->mysql, m_connPool);
             request->process();
         }
     }

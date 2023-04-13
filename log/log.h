@@ -39,7 +39,7 @@ private:
     int m_today;          //因为按天分类, 记录该日志文件创建时间是哪一天
 
     FILE *m_fp;        //打开log的文件指针
-    char *m_buf;       //要输出的内容
+    char *m_buf;       //暂存要写入的一行内容
     block_queue<std::string> *m_log_queue;  //阻塞队列
     bool m_isAsync;                       //是否异步标志位
     Locker m_mutex;                 //同步

@@ -14,6 +14,10 @@ const char *error_500_form = "There was an unusual problem serving the request f
 Locker m_lock;  //为什么定义在这里？
 std::map<std::string, std::string> users;
 
+//静态变量初始化
+int HttpConn::m_epollfd = -1;
+int HttpConn::m_user_count = 0;
+
 //对文件描述符设置非阻塞
 void setnonblocking(int fd) {
     int old_option = fcntl(fd, F_GETFL); //fcntl对文件描述符进行操作

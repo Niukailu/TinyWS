@@ -21,19 +21,20 @@ void SqlConnectionPool::init(std::string url, std::string user, std::string pass
     for (int i = 0; i < max_conn; i++)
     {
         MYSQL* con = nullptr;
-        con = mysql_init(con);
+        con = mysql_init(con); //初始化一个MySQL连接句柄（MYSQL结构体）,分配内存
 
         if(con == NULL) {
             LOG_ERROR("MySQL ERROR!");
             exit(1);
         }
+        //连接到MySQL服务器
         con = mysql_real_connect(con, url.c_str(), user.c_str(), passwd.c_str(), database_name.c_str(), port, NULL, 0);
 
         if(con == NULL) {
             LOG_ERROR("MySQL ERROR!");
             exit(1);
         }
-        connList.push_back(con);
+        connList.push_back(con); //放到数据库连接池 (链表结构)
         ++m_freeConn;
     }
     

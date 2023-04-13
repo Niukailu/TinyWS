@@ -10,7 +10,8 @@ int main(int argc, char *argv[]) {
     std::string database_name = "mywsdb";
 
     //命令行参数解析
-    Config config;
+    Config config;  
+    //不加参数默认用构造函数中定义的值
     config.parse_arg(argc, argv);
 
     WebServer server;
