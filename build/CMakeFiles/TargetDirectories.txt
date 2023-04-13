@@ -1,3 +1,0 @@
-/home/wangwei/TinyWS/build/CMakeFiles/tinyws.dir
-/home/wangwei/TinyWS/build/CMakeFiles/edit_cache.dir
-/home/wangwei/TinyWS/build/CMakeFiles/rebuild_cache.dir
