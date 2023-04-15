@@ -10,7 +10,7 @@
 class SqlConnectionPool
 {
 public:
-    //懒汉单例模式获取类的实例
+    //懒汉单例模式获取类的实例（局部静态变量）
     static SqlConnectionPool* get_instance();
     //初始化数据库连接池
     void init(std::string url, std::string user, std::string passwd, std::string database_name, int port, int max_conn, int close_log);
@@ -33,15 +33,17 @@ private:
     SqlConnectionPool();
     ~SqlConnectionPool();
 
+    //这几个变量都没有用到哎。。。
     int m_maxConn;        //最大连接数
     int m_curConn;         //当前已使用的连接数
     int m_freeConn;        //当前空闲的连接数
     
     std::list<MYSQL*> connList;  //数据库连接池
-    Sem reserve;           //信号量
+    Sem reserve;           //信号量：实现多线程同步访问连接池
     Locker lock;           //互斥锁
 };
 
+//
 class ConnectionRAII
 {
 public:

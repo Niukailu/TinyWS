@@ -30,9 +30,9 @@ public:
 
 public:
     time_t expire;             //超时时间
-    void (* cb_func)(client_data*); //回调函数 (函数类型的指针)
     client_data *user_data;
     UtilTimer *prev, *next;
+    void (* cb_func)(client_data*); //回调函数 (函数类型的指针)
 };
 
 class Sort_TimerLst
@@ -63,7 +63,7 @@ public:
     //将文件描述符设置为非阻塞
     int set_nonblocking(int fd);
 
-    //在内核事件表中注册读事件，ET模式，选择开启EPOLLONESHOT
+    //在内核事件表中注册读事件，选择开启EPOLLONESHOT
     void add_fd(int epollfd, int fd, bool one_shot, int TRIGMode);
 
     //信号处理函数
@@ -78,10 +78,10 @@ public:
     void show_error(int connfd, const char *info);
 
 public:
-    static int *u_pipefd;
+    static int *u_pipefd;       //本地通信的一对套接字
     Sort_TimerLst m_timer_lst;
-    static int u_epollfd;
-    int m_TIMESLOT;
+    static int u_epollfd;       //epoll文件描述符
+    int m_TIMESLOT;             //触发SIGALRM信号的时间间隔
 };
 
 

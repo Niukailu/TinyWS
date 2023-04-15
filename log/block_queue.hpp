@@ -154,9 +154,11 @@ bool block_queue<T>::pop(T &item) {
     m_mutex.lock();
     //如果队列是空的
     //多个消费者的时候，这里要是用while而不是if
+    //如果同时有两个或者两个以上的线程正在等待此资源，wait返回后，资源可能已经被使用了，要继续等待就用while
     while (m_size <= 0)
     {
         //阻塞等待条件变量满足(有元素被push进队列)
+        //阻塞的时候会被挂起
         if(!m_cond.wait(m_mutex.get())) {  //在等待期间会自动释放互斥锁，并允许其他线程获得它
             m_mutex.unlock();
             return false;
@@ -187,8 +189,7 @@ bool block_queue<T>::pop(T &item, int ms_timeout) { //超时处理，ms_timeout�
             return false;
         }
     }
-    //为什么还要再判断一下？
-    //理解是：如果有多个消费者，可能
+    //为什么还要再判断一下呢，理解如上
     if(m_size <= 0) { 
         m_mutex.unlock();
         return false;

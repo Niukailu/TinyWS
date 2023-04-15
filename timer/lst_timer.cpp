@@ -2,9 +2,9 @@
 
 //移除socket连接
 void cb_func(client_data *user_data) {
+    assert(user_data); 
     //删除非活动连接在socket上的注册事件
     epoll_ctl(Utils::u_epollfd, EPOLL_CTL_DEL, user_data->sockfd, 0);
-    assert(user_data);  //不应该写上面？？
     //关闭文件描述符
     close(user_data->sockfd);
     //减少连接数
@@ -60,7 +60,7 @@ void Sort_TimerLst::adjust_timer(UtilTimer *timer) {
     }
 }
 
-//将超时的定时器从链表中删除
+//从链表中删除某个定时器
 void Sort_TimerLst::del_timer(UtilTimer *timer) {
     if(timer == nullptr) return;
     if(timer == head && head == tail) {
@@ -86,6 +86,7 @@ void Sort_TimerLst::del_timer(UtilTimer *timer) {
 }
 
 //定时任务处理函数
+//将此时定时器链表上的超时的socket连接移除（包括定时器等等）
 void Sort_TimerLst::tick() {
     if(head == nullptr) return;
 
@@ -93,8 +94,9 @@ void Sort_TimerLst::tick() {
     UtilTimer *tmp = head;
     while (tmp != nullptr)
     {
-        //当前时间小于定时器的超时时间
+        //定时器的超时时间大于当前时间（还没到超时时间）
         if(cur < tmp->expire) break;
+        //已经到了超时时间的，需要被移除连接
         tmp->cb_func(tmp->user_data);
         head = head->next;
         if(head != nullptr) head->prev = nullptr;
@@ -134,16 +136,16 @@ int Utils::set_nonblocking(int fd) {
     int old_option = fcntl(fd, F_GETFL);
     int new_option = old_option | O_NONBLOCK;
     fcntl(fd, F_SETFL, new_option);
-    return old_option;  //需要return吗？
+    return old_option;  //不需要吧？
 }
 
 void Utils::add_fd(int epollfd, int fd, bool one_shot, int TRIGMode) {
     epoll_event event;
     event.data.fd = fd;
 
-    if(TRIGMode == 1) event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    if(TRIGMode == 1) event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;   //ET模式
     else event.events = EPOLLIN | EPOLLRDHUP;
-    //针对connfd，开启EPOLLONESHOT，因为我们希望每个socket在任意时刻都只被一个线程处理
+    //开启EPOLLONESHOT，确保每个文件描述符只被一个线程处理
     if(one_shot) event.events |= EPOLLONESHOT;
 
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
@@ -154,12 +156,12 @@ void Utils::add_fd(int epollfd, int fd, bool one_shot, int TRIGMode) {
 void Utils::sig_handler(int sig) {
     int save_errno = errno;
     int msg = sig;
-    //将信号值从管道写端写入，传输字符类型，而非整型，为什么？？？
-    send(u_pipefd[1], (char*)&msg, 1, 0); //???
+    //将信号值从管道写端写入（可以从 u_pipefd[0] 读取），传输字符类型，而非整型，为什么呢？
+    send(u_pipefd[1], (char*)&msg, 1, 0); 
     errno = save_errno;
 }
 
-//设置信号函数
+//设置信号处理函数
 void Utils::add_signal(int sig, void(*handler)(int), bool restart) {
     struct sigaction sa;
     memset(&sa, '\0', sizeof(sa));
@@ -168,9 +170,10 @@ void Utils::add_signal(int sig, void(*handler)(int), bool restart) {
     sa.sa_handler = handler;
     //SA_RESTART，表示在信号处理程序被中断后，系统会自动重启被中断的系统调用
     if(restart) sa.sa_flags |= SA_RESTART;
-    //将所有信号添加到信号集中
+    //在信号处理函数执行期间阻塞所有信号。
+    //这样可以确保在信号处理函数执行期间不会被其他信号中断，从而提高信号处理函数的可靠性和安全性。
     sigfillset(&sa.sa_mask);
-    //设置信号的处理方式
+    //设置信号的处理方式（参数一：要设置的信号类型；参数二：指定新的信号处理函数和信号处理选项）
     assert(sigaction(sig, &sa, NULL) != -1);
 }
 
@@ -182,7 +185,9 @@ void Utils::timer_handler() {
 }
 
 void Utils::show_error(int connfd, const char *info) {
+    //向socket连接描述符connfd发送数据（在内核缓冲区）
     send(connfd, info, strlen(info), 0);
+    //关闭这个socket套接字
     close(connfd);
 }
 

@@ -21,13 +21,13 @@ int main(int argc, char *argv[]) {
                 config.OPT_LINGER,config.TRIGMode, config.sql_num, config.thread_num, 
                 config.close_log, config.actor_model);
 
-    //日志
+    //初始化日志
     server.log_write();
 
-    //数据库
+    //初始化数据库连接池
     server.sql_pool();
 
-    //线程池
+    //初始化线程连接池
     server.thread_pool();
 
     //触发模式

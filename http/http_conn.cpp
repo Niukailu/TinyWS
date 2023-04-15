@@ -46,11 +46,11 @@ void modfd(int epollfd, int fd, int ev, int TRIGMode) {
     epoll_event event;
     event.data.fd = fd;
 
-    if(TRIGMode == 1) //如果是边缘触发模式
+    if(TRIGMode == 1) //如果是边缘触发模式ET
         event.events = ev | EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
-    else 
+    else  //LT
         event.events = ev | EPOLLONESHOT | EPOLLRDHUP; //EPOLLRDHUP半连接状态
-
+    //修改已经注册的事件
     epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
 
@@ -113,7 +113,7 @@ void HttpConn::init_mysqlResult(SqlConnectionPool* connPool) {
 
     //在user表中检索浏览器端输入的username，passwd数据
     if(mysql_query(mysql, "SELECT username,passwd FROM user")) {
-        LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));  //错误不返回吗？
+        LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));  //这里错误不返回吗？
     }
     //从表中检索完整的结果集存到res
     MYSQL_RES *res = mysql_store_result(mysql);
@@ -123,22 +123,23 @@ void HttpConn::init_mysqlResult(SqlConnectionPool* connPool) {
     //返回包含该表中所有字段结构的数组
     //MYSQL_FIELD *fields = mysql_fetch_fields(res);
 
-    //从结果集中获取下一行，将对应的用户名和密码，存入map中
+    //从结果集中获取下一行，将对应的用户名和密码，存入users这个map中
     MYSQL_ROW row = NULL;
     while ((row = mysql_fetch_row(res)))
     {
         users[std::string(row[0])] = std::string(row[1]);
     }
-    //最后不应该释放结果集吗
-    //mysql_free_result(res);
+    //最后不应该释放结果集吗。。
+    mysql_free_result(res);
 }
 
+//关闭这个socket连接
 void HttpConn::close_conn(bool real_close) {
     if(real_close && m_sockfd != -1) {
         printf("close %d\n", m_sockfd);
         removefd(m_epollfd, m_sockfd);
         --m_user_count;
-        m_sockfd = -1;   //为啥等-1?
+        m_sockfd = -1;   
     }
 }
 
@@ -150,23 +151,25 @@ bool HttpConn::read_once() {
     
     if(m_TRIGMode == 0) {  //LT读取数据
         //recv是一个系统调用函数，用于在socket上接收数据
+        //从内核的socket缓冲区读到用户缓冲区m_read_buf
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
-        m_read_idx += bytes_read; //要判断一下bytes_read吧？？
         if(bytes_read <= 0) return false;
+        m_read_idx += bytes_read; 
         return true;
     }
-    else {  //ET读数据
+    else {  //ET读数据 (一次性读取完)
         while (true)
         {
             //读到m_read_buf缓冲区
             bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
             if(bytes_read == -1) {
-                //errno不用初始化？
+                //错误码EAGAIN：资源暂时不可用 EWOULDBLOCK："操作会阻塞，但套接字已设置为非阻塞模式"
                 if(errno == EAGAIN || errno == EWOULDBLOCK) break;
                 return false;
             }
+            //表示远程连接已经关闭, 没有更多的数据可以读取了
             else if(bytes_read == 0) {
-                return false;   //为啥是false?
+                return false;   
             }
             m_read_idx += bytes_read;
         }
@@ -174,7 +177,7 @@ bool HttpConn::read_once() {
     }
 }
 
-//从状态机，负责读取报文的一行内容(解析整个报文，把每行通过'\0'划分开)
+//从状态机，负责读取报文的一行内容(解析整个请求报文做处理：把每行的\r\n换成'\0\0'，作为分隔符)
 //返回值为行的读取状态，有LINE_OK,LINE_BAD,LINE_OPEN
 HttpConn::LINE_STATUS HttpConn::parse_line() {
     char tmp;
@@ -184,14 +187,15 @@ HttpConn::LINE_STATUS HttpConn::parse_line() {
         tmp = m_read_buf[m_checked_idx];
         //在HTTP报文中，每一行的数据由\r\n作为结束字符，空行则是仅仅是字符\r\n
         if(tmp == '\r') {
-            if((m_checked_idx + 1) == m_read_idx) //表示buffer还需要继续接收，返回LINE_OPEN
+            //表示buffer还需要继续接收，返回LINE_OPEN：这一行还没完
+            if((m_checked_idx + 1) == m_read_idx) 
                 return LINE_OPEN;
             else if(m_read_buf[m_checked_idx + 1] == '\n') {  //将m_checked_idx指向下一行的开头
                 m_read_buf[m_checked_idx++] = '\0';
                 m_read_buf[m_checked_idx++] = '\0';  
-                return LINE_OK;
+                return LINE_OK; //读了完整的一行
             }
-            return LINE_BAD;  //语法错误
+            return LINE_BAD;  //否则语法错误
         }
         //一般是上次读取到\r就到buffer末尾了，没有接收完整，再次接收时会出现这种情况
         else if(tmp == '\n') {
@@ -208,14 +212,14 @@ HttpConn::LINE_STATUS HttpConn::parse_line() {
 }
 
 //解析http请求行，获得请求方法，目标url及http版本号(顺序固定)
-//在主状态机进行解析前，从状态机已经将每一行的末尾\r\n符号改为\0\0
+//（在主状态机进行解析前，从状态机已经将每一行的末尾\r\n符号改为\0\0）
 HttpConn::HTTP_CODE HttpConn::parse_request_line(char *text) {
-    //在text中查找第一个出现在" \t"中的字符的位置(因为各个部分之间通过\t或空格分隔)
+    //在text中查找第一个出现在" \t"中的字符的位置 (因为各个部分之间通过\t或空格分隔)
     m_url = strpbrk(text, " \t");
     if(m_url == NULL) return BAD_REQUEST;
     //先将m_url所指处改为\0，代表结束符，再++
     *m_url++ = '\0';
-    //此时text到\0处结束，即取出一个字段
+    //此时text到\0处结束，即取出一个字段：请求方法
     char *method = text;
     //不区分大小写的字符串比较
     if(strcasecmp(method, "GET") == 0) m_method = GET;
@@ -256,6 +260,7 @@ HttpConn::HTTP_CODE HttpConn::parse_request_line(char *text) {
 }
 
 //解析http请求头的信息 (HTTP请求头中的字段顺序并没有严格的规定)
+//可能有多行
 HttpConn::HTTP_CODE HttpConn::parse_headers(char *text) {
     //若是'\0'表示处理的是空行
     if(text[0] == '\0') {
@@ -301,7 +306,7 @@ HttpConn::HTTP_CODE HttpConn::parse_content(char *text) {
     return NO_REQUEST;
 }
 
-//读取请求报文
+//读取用户缓冲区的请求报文，为了进行后续的数据处理
 HttpConn::HTTP_CODE HttpConn::process_read() {
     //初始化
     LINE_STATUS line_status = LINE_OK;
@@ -310,6 +315,7 @@ HttpConn::HTTP_CODE HttpConn::process_read() {
 
     while ((m_check_state == CHECK_STATE_CONTENT && line_status == LINE_OK) || ((line_status = parse_line()) == LINE_OK))
     {
+        //获取一行内容
         text = get_line();
         //m_start_line初始化是0, m_checked_idx指向下一行的开头
         m_start_line = m_checked_idx;
@@ -317,7 +323,7 @@ HttpConn::HTTP_CODE HttpConn::process_read() {
 
         switch (m_check_state)
         {
-        case CHECK_STATE_REQUESTLINE:
+        case CHECK_STATE_REQUESTLINE: //初始值是这个
             ret = parse_request_line(text);
             if(ret == BAD_REQUEST) return BAD_REQUEST;
             break;
@@ -331,18 +337,21 @@ HttpConn::HTTP_CODE HttpConn::process_read() {
             if(ret == GET_REQUEST) return do_request();
             line_status = LINE_OPEN;  //表示消息体不完整，跳出循环
             break;
-        default:
+        default:    //没这个情况吧
             return INTERNAL_ERROR;
         }
     }
-    //这里不对？？
+    //这里原本不对，不满足while循环条件不应该直接返回NO_REQUEST
+    if(line_status == LINE_BAD) return BAD_REQUEST;
+    //这里应该是 line_status == LINE_OPEN 的情况
     return NO_REQUEST;
 }
 
+//已经得到了完整的请求报文，开始做逻辑处理
 HttpConn::HTTP_CODE HttpConn::do_request() {
-    //doc_root为网站根目录？
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
+    //找请求的url中第一个/的位置
     const char *p = strchr(m_url, '/'); 
 
     //cgi = 1代表需要验证登录注册信息，'/'后的数字是在前端form表单的action属性自定义的
@@ -352,11 +361,13 @@ HttpConn::HTTP_CODE HttpConn::do_request() {
         char flag = m_url[1];
         //存去掉标记的url
         char *m_url_real = (char*)malloc(sizeof(char) * 200);
+
+        /*觉得这里有问题。。。
         strcpy(m_url_real, "/");
         strcat(m_url_real, m_url + 2);
         //复制FILENAME_LEN - len - 1个字符到m_real_file
         strncpy(m_real_file + len, m_url_real, FILENAME_LEN - len - 1);
-        free(m_url_real);
+        */
 
         //将用户名和密码提取出来(user=***&password=***)
         char name[100], passwd[100];
@@ -384,26 +395,31 @@ HttpConn::HTTP_CODE HttpConn::do_request() {
 
                 m_lock.lock();
                 int res = mysql_query(mysql, sql_insert);
-                m_lock.unlock();
-                free(sql_insert);
-
-                if(res == 0) {  //插入成功
-                    strcpy(m_url, "/log.html"); //strcpy函数会覆盖目标字符串
-                    users[std::string(name)] = std::string(passwd); //users是全局变量，要加锁吧？
+                if(res != 0) { //插入失败
+                    m_lock.unlock();
+                    strcpy(m_url_real, "/registerError.html"); 
+                } 
+                else {
+                    users[std::string(name)] = std::string(passwd); //users是全局变量，要加锁
+                    m_lock.unlock();
+                    strcpy(m_url_real, "/log.html"); //strcpy函数会覆盖目标字符串
                 }
-                else strcpy(m_url, "/registerError.html"); //这里也没有复制到 m_real_file 变量里啊???
+                free(sql_insert);
             }
             else {
-                strcpy(m_url, "/registerError.html");
+                strcpy(m_url_real, "/registerError.html");
             }
         }
         //如果是登录，直接判断浏览器端输入的用户名和密码是否可以在表中(map)查找到，找到返回1，否则返回0
         else if(*(p + 1) == '2') {
             if(users.count(name) && passwd == users[name]) {
-                strcpy(m_url, "/welcome.html");
+                strcpy(m_url_real, "/welcome.html");
             }
-            else strcpy(m_url, "/logError.html");
+            else strcpy(m_url_real, "/logError.html");
         }
+        //原代码这里没有复制到 m_real_file 变量里啊。。。
+        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        free(m_url_real);
     }
     //后面这段写的好冗余。。。
     //表示是新用户，需要跳转到注册界面
@@ -458,9 +474,11 @@ HttpConn::HTTP_CODE HttpConn::do_request() {
     if (!(m_file_stat.st_mode & S_IROTH)) return FORBIDDEN_REQUEST;
     //S_ISDIR 宏定义可以用于判断一个文件或目录是否为: 目录类型
     if (S_ISDIR(m_file_stat.st_mode)) return BAD_REQUEST;
-    //不是目录，就以只读模式打开文件。
+
+    //不是目录，就以只读模式打开文件（在内核创建一个新的文件描述符，用于表示该文件）
     int fd = open(m_real_file, O_RDONLY);  //不得判断下返回值？
     //PROT_READ：可读; MAP_PRIVATE：私有映射
+    //将文件映射到用户的虚拟内存空间
     m_file_address = (char*)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0); //不得判断下返回值？
     close(fd);
     return FILE_REQUEST;
@@ -533,7 +551,8 @@ bool HttpConn::add_content(const char *content) {
     return add_response("%s", content);
 }
 
-//写响应报文
+//写响应报文（到用户缓冲区 m_write_buf）
+//并定义 m_iv 
 bool HttpConn::process_write(HTTP_CODE ret) {
     switch (ret)
     {
@@ -565,12 +584,13 @@ bool HttpConn::process_write(HTTP_CODE ret) {
     {
         add_status_line(200, ok_200_title);
         if(m_file_stat.st_size != 0) {
-            add_headers(m_file_stat.st_size); //消息体在第二个缓冲区？
+            add_headers(m_file_stat.st_size); 
 
             //struct iovec 用于在用户空间和内核空间之间传递数据
             //可以一次性读取或写入多个缓冲区的数据，提高数据传输效率
             m_iv[0].iov_base = m_write_buf; //内存缓冲区的起始地址
             m_iv[0].iov_len = m_write_idx;   //缓冲区的长度
+            //消息体是文件映射区的内容
             m_iv[1].iov_base = m_file_address; 
             m_iv[1].iov_len = m_file_stat.st_size; 
             m_iv_count = 2;
@@ -586,7 +606,7 @@ bool HttpConn::process_write(HTTP_CODE ret) {
     default:
         return false;
     }
-    //除FILE_REQUEST状态外，其余状态只申请一个iovec，指向响应报文缓冲区
+    //除FILE_REQUEST状态外，其余状态只申请一个iovec，指向响应报文缓冲区(在用户空间)
     m_iv[0].iov_base = m_write_buf;
     m_iv[0].iov_len = m_write_idx;
     m_iv_count = 1;
@@ -594,7 +614,7 @@ bool HttpConn::process_write(HTTP_CODE ret) {
     return true;
 }
 
-//
+//从用户缓冲区写入内核的socket缓冲区（内核会自动写入到网卡）
 bool HttpConn::write() {
     int tmp = 0;
     //表示响应报文为空，一般不会出现这种情况
@@ -606,7 +626,7 @@ bool HttpConn::write() {
 
     while (1)
     {
-        //将多个缓冲区数据写入到文件描述符 m_sockfd 
+        //将多个缓冲区数据写入到内核的套接字缓冲区：m_sockfd 
         //writev()函数返回写入的字节数，如果出现错误则返回-1
         tmp = writev(m_sockfd, m_iv, m_iv_count);
 
@@ -625,7 +645,7 @@ bool HttpConn::write() {
         bytes_have_send += tmp;
         bytes_to_send -= tmp;
         if(bytes_have_send >= m_iv[0].iov_len) { //因为两个缓冲区不连续？？
-            //不再继续发送头部信息，去第二个文件的缓冲区写？
+            //不再继续发送头部信息，去写第二个文件的缓冲区？
             m_iv[0].iov_len = 0;
             m_iv[1].iov_base = m_file_address + bytes_have_send - m_write_idx;
             m_iv[1].iov_len = bytes_to_send;
@@ -647,18 +667,24 @@ bool HttpConn::write() {
             else return false;
         }
     }
-    //最后不需要return了？
 }
 
+//逻辑处理：对请求做解析、处理、生成响应报文
 void HttpConn::process() {
     HTTP_CODE read_ret = process_read();
     //NO_REQUEST表示请求报文还没读取完整，还需继续读
     if(read_ret == NO_REQUEST) {
+        //修改已经注册的事件
         modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
         return;
     }
-    //
+    //前面process_read会调用do_request去做处理（把请求的文件mmap映射到用户空间）
+    //这里主要把响应数据写入用户的响应报文缓冲区
     bool write_ret = process_write(read_ret);
-    if(!write_ret) close_conn();
-    modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode); //这里不应该else?
+    if(!write_ret) {
+        close_conn();
+        return;
+    }
+    //修改为读状态
+    modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode); 
 }

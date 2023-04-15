@@ -41,10 +41,12 @@ public:
     //LINE_OK：完整读取一行；LINE_BAD：报文语法有误；LINE_OPEN：读取的行不完整
     enum LINE_STATUS{LINE_OK = 0, LINE_BAD, LINE_OPEN};
 
-    static int m_epollfd;
-    static int m_user_count;
-    MYSQL* mysql;   //用于插入、查询等sql操作
-    int m_state;     //读为0, 写为1
+    //静态变量，多个对象共享
+    static int m_epollfd;    //epoll文件描述符
+    static int m_user_count; //用户数量
+
+    MYSQL* mysql;           //该Http连接对象对应的一个数据库连接，用于插入、查询等sql操作
+    int m_state;            //读为0, 写为1
 
 public:
     HttpConn() {};
@@ -54,26 +56,30 @@ public:
     void init(int sockfd, const sockaddr_in &addr, char* root, int TRIGMode, int close_log, std::string user, std::string passwd, std::string sqlname);
     //关闭http连接
     void close_conn(bool real_close = true);
-    //处理
-    void process();
+
     //读取浏览器端发来的全部数据
     bool read_once();
+    //处理
+    void process();
     //响应报文写入函数
     bool write();
 
     sockaddr_in* get_address() {
         return &m_address;
     }
+
     //同步线程初始化数据库读取表
-    void init_mysqlResult(SqlConnectionPool* connPool);
-    int timer_flag;
-    int improv;
+    //这个函数没必要写在这个类里吧。。而且感觉可以直接写成静态成员函数，方便调用
+    void init_mysqlResult(SqlConnectionPool* connPool); 
+
+    int timer_flag;     //
+    int improv;         //
 
 private:
-    int m_sockfd;
-    sockaddr_in m_address;
+    int m_sockfd;           //套接字文件描述符
+    sockaddr_in m_address;   //
 
-    //存储读取的请求报文数据
+    //存储读取的请求报文数据 (在用户缓冲区)
     char m_read_buf[READ_BUFFER_SIZE];
     //缓冲区中m_read_buf中数据的最后一个字节的下一个位置
     long m_read_idx;
@@ -82,7 +88,7 @@ private:
     //m_read_buf中已经解析的字符个数
     int m_start_line;
 
-    //存储发出的响应报文数据
+    //存储发出的响应报文数据 (在用户缓冲区)
     char m_write_buf[WRITE_BUFFER_SIZE];
     //指示m_write_buf中的长度
     int m_write_idx;
@@ -100,25 +106,28 @@ private:
     long m_content_length;
     bool m_linger;
 
-    char* m_file_address;      //mmap将服务器上的文件映射到内存的地址
+    char* m_file_address;      //mmap将服务器上的文件映射到用户空间的地址
     struct stat m_file_stat;   //存被读取文件的状态信息
-    struct iovec m_iv[2];
-    int m_iv_count;
-    int cgi;          //CGI校验？代码里并没有用啊？？
+
+    struct iovec m_iv[2];   // 可以发送多重缓冲区的数据，和 writev()一起用  
+    int m_iv_count;         //缓冲区的个数
+
+    int cgi;          //CGI校验？代码里并没有用啊。。。
     char* m_string;    //存储请求头数据
     int bytes_to_send;   //剩余要发送字节数
     int bytes_have_send; //已发送字节数
-    char *doc_root;
+    char *doc_root;     //被请求文件存放的路径：./root/
 
     std::map<std::string, std::string> m_users;
     int m_TRIGMode;
     int m_close_log;
 
-    char sql_user[100];
-    char sql_passwd[100];
+    char sql_user[100];    //登录数据库用户名
+    char sql_passwd[100];   //登录数据库密码
     char sql_name[100];    //数据库名
 
 private:
+    //
     void init();
     //从m_read_buf读取，并处理请求报文
     HTTP_CODE process_read();
@@ -135,7 +144,7 @@ private:
     HTTP_CODE do_request();
 
     //m_start_line是已经解析的字符
-    //get_line用于将指针向后偏移，指向未处理的字符
+    //get_line用于将指针向后偏移，指向未处理的字符。获取一行数据
     char *get_line() { return m_read_buf + m_start_line; };
 
     //从状态机负责读取报文一行，分析是请求报文的哪一部分

@@ -28,7 +28,7 @@ bool Log::init(const char* file_name, int close_log, int log_buf_size, int split
         m_log_queue = new block_queue<std::string>(max_queue_size);
         pthread_t tid;
         //flush_log_thread为回调函数, 这里表示创建一个写线程来异步写日志
-        //会一直执行直到函数返回（和主线程并发执行）
+        //（和主线程并发执行）
         pthread_create(&tid, NULL, flush_log_thread, NULL);
     }
 

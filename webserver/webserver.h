@@ -42,25 +42,25 @@ public:
 public:
 
     int m_port;     //开放的端口号
-    char *m_root;
+    char *m_root;   //被请求文件存放的路径，本项目中是：./root/
     int m_log_write;    //日志写入方式
-    int m_close_log;
+    int m_close_log;    //是否关闭日志
     int m_actor_model; //并发模型选择，默认是proactor
 
-    int m_pipefd[2];
-    int m_epollfd;
+    int m_pipefd[2];    //
+    int m_epollfd;      //epoll文件描述符
 
-    HttpConn *users;
+    HttpConn *users; //Http连接的客户
 
     //数据库相关
-    SqlConnectionPool *m_connPool;
+    SqlConnectionPool *m_connPool; //数据库连接池对象指针
     std::string m_user;           //登录数据库用户名
     std::string m_passwd;         //登录数据库密码
     std::string m_database_name;  //使用数据库名
     int m_sql_num;              //数据库连接池数量
 
-    //线程池相关
-    threadpool<HttpConn> *m_pool;
+    //线程池（处理Http连接）相关
+    threadpool<HttpConn> *m_pool;   //线程池对象指针
     int m_thread_num;               //线程池内的线程数量
 
     //epoll_event相关
