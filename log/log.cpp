@@ -165,7 +165,7 @@ void* Log::async_write_log() {
     }
 }
 
-//这个函数也没用到啊。。。
+//每次调用完 write_log 都要 flush (缓冲区写入磁盘)
 void Log::flush(void) {
     m_mutex.lock();
     fflush(m_fp);

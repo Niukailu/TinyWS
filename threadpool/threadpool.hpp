@@ -135,8 +135,8 @@ void threadpool<T>::run() { //为什么不直接用这个函数呢？？
             if(request->m_state == 0) { 
                 //如果正确读取了socket数据到用户缓冲区了
                 if(request->read_once()) {
-                    request->improv = 1; //这个标志有啥用？？？
-                    //从连接池中取出一个数据库连接
+                    request->improv = 1; //这个标志代表当前sockfd连接被工作线程读到了？
+                    //从连接池中取出一个数据库连接（这里这个数据库连接可能取失败返回nullptr啊。。。）
                     ConnectionRAII mysqlcon(&request->mysql, m_connPool);
                     //处理请求
                     request->process();

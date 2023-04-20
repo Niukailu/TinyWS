@@ -332,10 +332,10 @@ void WebServer::deal_with_read(int sockfd) {
         //同步，让线程池的线程负责处理读事件
         m_pool->append(users + sockfd, 0);
 
-        while (true)    //？
+        while (true)    //等待被工作线程做读处理
         {
-            if(users[sockfd].improv == 1) {
-                if(users[sockfd].timer_flag == 1) {
+            if(users[sockfd].improv == 1) { //代表当前sockfd被读了
+                if(users[sockfd].timer_flag == 1) { //read_once 读失败了就移除连接
                     deal_timer(timer, sockfd);
                     users[sockfd].timer_flag = 0;
                 }

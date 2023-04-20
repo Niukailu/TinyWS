@@ -25,7 +25,7 @@ void setnonblocking(int fd) {
     fcntl(fd, F_SETFL, new_option);
 }
 
-//将内核事件表注册读事件? ET模式，选择开启EPOLLONESHOT
+//将内核事件表注册为读事件 ET模式，选择开启EPOLLONESHOT
 void addfd(int epollfd, int fd, bool one_shot, int TRIGMode) {
     epoll_event event;
     event.data.fd = fd;
@@ -644,8 +644,8 @@ bool HttpConn::write() {
 
         bytes_have_send += tmp;
         bytes_to_send -= tmp;
-        if(bytes_have_send >= m_iv[0].iov_len) { //因为两个缓冲区不连续？？
-            //不再继续发送头部信息，去写第二个文件的缓冲区？
+        if(bytes_have_send >= m_iv[0].iov_len) { //因为两个缓冲区不连续？
+            //不再继续发送头部信息，去写第二个文件的缓冲区
             m_iv[0].iov_len = 0;
             m_iv[1].iov_base = m_file_address + bytes_have_send - m_write_idx;
             m_iv[1].iov_len = bytes_to_send;
